@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Pocket</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+  <main>
+    <h1>Pocket</h1>
+    <p id="status">Загрузка…</p>
+
+    <section id="bases-section" hidden>
+      <h2>Базы</h2>
+      <ul id="bases"></ul>
+    </section>
+
+    <section id="owner-section" hidden>
+      <h2>Добавить базу</h2>
+      <form id="base-form">
+        <label>Название <input name="name" required /></label>
+        <label>OData URL <input name="odata_url" required placeholder="https://…/odata/standard.odata" /></label>
+        <label>Логин 1С <input name="login" required /></label>
+        <label>Пароль 1С <input name="password" type="password" required /></label>
+        <button type="submit">Проверить и сохранить</button>
+      </form>
+
+      <h2>ACL — доступ по телефону</h2>
+      <form id="acl-form">
+        <label>ID базы <input name="base_id" type="number" required /></label>
+        <label>Телефон <input name="phone" required placeholder="77001234567" /></label>
+        <button type="submit">Добавить доступ</button>
+      </form>
+    </section>
+  </main>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

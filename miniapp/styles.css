@@ -1,0 +1,46 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 16px;
+  background: var(--tg-theme-bg-color, #111);
+  color: var(--tg-theme-text-color, #eee);
+}
+
+main {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+h1, h2 {
+  font-weight: 600;
+}
+
+label {
+  display: block;
+  margin: 8px 0;
+}
+
+input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 8px;
+}
+
+button {
+  margin-top: 12px;
+  padding: 10px 14px;
+  width: 100%;
+}
+
+ul {
+  padding-left: 18px;
+}
+
+.err {
+  color: #f66;
+}
