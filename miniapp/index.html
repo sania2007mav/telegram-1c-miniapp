@@ -9,29 +9,67 @@
 </head>
 <body>
   <main>
-    <h1>Pocket</h1>
-    <p id="status">Загрузка…</p>
+    <header class="top">
+      <h1>Pocket</h1>
+      <p id="status" class="muted">Загрузка…</p>
+    </header>
 
-    <section id="bases-section" hidden>
+    <section id="bases-section" class="card" hidden>
       <h2>Базы</h2>
-      <ul id="bases"></ul>
+      <div id="bases" class="list"></div>
+      <details class="more">
+        <summary>Добавить базу / ACL</summary>
+        <form id="base-form" class="stack">
+          <label>Название <input name="name" required /></label>
+          <label>OData URL <input name="odata_url" required placeholder="https://…/odata/standard.odata" /></label>
+          <label>Логин 1С <input name="login" required /></label>
+          <label>Пароль 1С <input name="password" type="password" required /></label>
+          <button type="submit">Проверить и сохранить</button>
+        </form>
+        <form id="acl-form" class="stack">
+          <h3>Доступ по телефону</h3>
+          <label>ID базы <input name="base_id" type="number" required /></label>
+          <label>Телефон <input name="phone" required placeholder="77001234567" /></label>
+          <button type="submit">Добавить доступ</button>
+        </form>
+      </details>
     </section>
 
-    <section id="owner-section" hidden>
-      <h2>Добавить базу</h2>
-      <form id="base-form">
-        <label>Название <input name="name" required /></label>
-        <label>OData URL <input name="odata_url" required placeholder="https://…/odata/standard.odata" /></label>
-        <label>Логин 1С <input name="login" required /></label>
-        <label>Пароль 1С <input name="password" type="password" required /></label>
-        <button type="submit">Проверить и сохранить</button>
-      </form>
+    <section id="money-section" class="card" hidden>
+      <div class="row between">
+        <h2 id="money-title">Деньги</h2>
+        <button type="button" id="btn-refresh" class="ghost">Обновить</button>
+      </div>
+      <div class="kpi">
+        <div>
+          <div class="kpi-label">Свободно в 1С</div>
+          <div class="kpi-value" id="free-total">—</div>
+        </div>
+        <div>
+          <div class="kpi-label">В фондах</div>
+          <div class="kpi-value" id="allocated-total">—</div>
+        </div>
+        <div>
+          <div class="kpi-label">Не размечено</div>
+          <div class="kpi-value" id="unallocated">—</div>
+        </div>
+      </div>
+      <p class="muted small" id="money-note"></p>
 
-      <h2>ACL — доступ по телефону</h2>
-      <form id="acl-form">
-        <label>ID базы <input name="base_id" type="number" required /></label>
-        <label>Телефон <input name="phone" required placeholder="77001234567" /></label>
-        <button type="submit">Добавить доступ</button>
+      <h3>Кассы и счета</h3>
+      <div id="accounts" class="list"></div>
+
+      <h3>Фонды</h3>
+      <div id="funds" class="list"></div>
+
+      <h3>Создать фонд</h3>
+      <p class="muted small">Подсказки — типичные конверты в проектном управлении.</p>
+      <div id="presets" class="chips"></div>
+      <form id="fund-form" class="stack">
+        <label>Название <input name="name" id="fund-name" required /></label>
+        <label>Сумма <input name="amount" id="fund-amount" type="number" min="0" step="0.01" required /></label>
+        <label>Заметка <input name="note" id="fund-note" placeholder="опционально" /></label>
+        <button type="submit">Создать фонд</button>
       </form>
     </section>
   </main>

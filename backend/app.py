@@ -14,15 +14,31 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from config import settings
-from crypto import encrypt_password
+from crypto import decrypt_password, encrypt_password
 from db import (
     connect,
+    create_fund,
+    delete_fund,
+    get_base_credentials,
     get_user_by_telegram,
     init_db,
     list_bases_for_phone,
+    list_funds,
     normalize_phone,
+    update_fund,
     upsert_user,
+    user_can_access_base,
 )
+from odata_money import fetch_free_money
+
+FUND_PRESETS = [
+    {"name": "Зарплата", "hint": "ФОТ, авансы, оклады"},
+    {"name": "Бонусы", "hint": "Премии, KPI"},
+    {"name": "Налоги", "hint": "Налоги и взносы к уплате"},
+    {"name": "Резерв", "hint": "Подушка безопасности"},
+    {"name": "Операционный", "hint": "Текущие расходы"},
+    {"name": "Проект", "hint": "Бюджет конкретного проекта — уточните название"},
+]
 
 ROOT = Path(__file__).resolve().parent.parent
 MINIAPP = ROOT / "miniapp"
@@ -45,6 +61,18 @@ class BaseCreate(BaseModel):
 
 class AccessAdd(BaseModel):
     phone: str
+
+
+class FundCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    amount: float = Field(ge=0)
+    note: str = Field(default="", max_length=500)
+
+
+class FundUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    amount: float | None = Field(default=None, ge=0)
+    note: str | None = Field(default=None, max_length=500)
 
 
 def verify_init_data(init_data: str) -> dict:
@@ -77,9 +105,21 @@ def require_user(x_telegram_init_data: str | None) -> dict:
     return {"telegram_id": telegram_id, "phone": row["phone"], "user_id": row["id"]}
 
 
+def require_base(user: dict, base_id: int):
+    row = user_can_access_base(user["user_id"], user["phone"], base_id)
+    if row is None:
+        raise HTTPException(404, "Base not found or access denied")
+    return row
+
+
 @app.get("/api/health")
 def health():
     return {"ok": True, "app": "pocket"}
+
+
+@app.get("/api/fund-presets")
+def fund_presets():
+    return {"items": FUND_PRESETS}
 
 
 @app.post("/api/auth/phone")
@@ -185,6 +225,117 @@ def list_access(
             (base_id,),
         ).fetchall()
     return {"items": [{"phone": r["phone"], "created_at": r["created_at"]} for r in rows]}
+
+
+@app.get("/api/bases/{base_id}/money")
+def base_money(
+    base_id: int,
+    x_telegram_init_data: str | None = Header(default=None),
+):
+    user = require_user(x_telegram_init_data)
+    require_base(user, base_id)
+    creds = get_base_credentials(base_id)
+    if creds is None:
+        raise HTTPException(400, "OData credentials missing")
+    odata_url, login, password_encrypted = creds
+    password = decrypt_password(password_encrypted)
+    money = fetch_free_money(odata_url, login, password)
+    funds = list_funds(base_id)
+    allocated = sum(float(f["amount"]) for f in funds)
+    free_total = float(money["free_total"])
+    return {
+        **money,
+        "allocated_total": allocated,
+        "unallocated": free_total - allocated,
+        "funds": [
+            {
+                "id": f["id"],
+                "name": f["name"],
+                "amount": f["amount"],
+                "note": f["note"],
+                "updated_at": f["updated_at"],
+            }
+            for f in funds
+        ],
+    }
+
+
+@app.get("/api/bases/{base_id}/funds")
+def get_funds(
+    base_id: int,
+    x_telegram_init_data: str | None = Header(default=None),
+):
+    user = require_user(x_telegram_init_data)
+    require_base(user, base_id)
+    funds = list_funds(base_id)
+    return {
+        "items": [
+            {
+                "id": f["id"],
+                "name": f["name"],
+                "amount": f["amount"],
+                "note": f["note"],
+                "updated_at": f["updated_at"],
+            }
+            for f in funds
+        ]
+    }
+
+
+@app.post("/api/bases/{base_id}/funds")
+def post_fund(
+    base_id: int,
+    body: FundCreate,
+    x_telegram_init_data: str | None = Header(default=None),
+):
+    user = require_user(x_telegram_init_data)
+    require_base(user, base_id)
+    fund = create_fund(base_id, body.name, body.amount, body.note, user["user_id"])
+    return {
+        "id": fund["id"],
+        "name": fund["name"],
+        "amount": fund["amount"],
+        "note": fund["note"],
+    }
+
+
+@app.patch("/api/bases/{base_id}/funds/{fund_id}")
+def patch_fund(
+    base_id: int,
+    fund_id: int,
+    body: FundUpdate,
+    x_telegram_init_data: str | None = Header(default=None),
+):
+    user = require_user(x_telegram_init_data)
+    require_base(user, base_id)
+    fund = update_fund(
+        fund_id,
+        base_id,
+        name=body.name,
+        amount=body.amount,
+        note=body.note,
+    )
+    if fund is None:
+        raise HTTPException(404, "Fund not found")
+    return {
+        "id": fund["id"],
+        "name": fund["name"],
+        "amount": fund["amount"],
+        "note": fund["note"],
+    }
+
+
+@app.delete("/api/bases/{base_id}/funds/{fund_id}")
+def remove_fund(
+    base_id: int,
+    fund_id: int,
+    x_telegram_init_data: str | None = Header(default=None),
+):
+    user = require_user(x_telegram_init_data)
+    require_base(user, base_id)
+    if not delete_fund(fund_id, base_id):
+        raise HTTPException(404, "Fund not found")
+    return {"ok": True}
 
 
 if MINIAPP.is_dir():

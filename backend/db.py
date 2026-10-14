@@ -50,8 +50,118 @@ def init_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone);
             CREATE INDEX IF NOT EXISTS idx_base_access_phone ON base_access(phone);
+
+            CREATE TABLE IF NOT EXISTS funds (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              base_id INTEGER NOT NULL REFERENCES bases(id) ON DELETE CASCADE,
+              name TEXT NOT NULL,
+              amount REAL NOT NULL DEFAULT 0,
+              note TEXT NOT NULL DEFAULT '',
+              created_by INTEGER REFERENCES users(id),
+              created_at TEXT NOT NULL DEFAULT (datetime('now')),
+              updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_funds_base ON funds(base_id);
             """
         )
+
+
+def user_can_access_base(user_id: int, phone: str, base_id: int) -> sqlite3.Row | None:
+    phone = normalize_phone(phone)
+    with connect() as conn:
+        return conn.execute(
+            """
+            SELECT b.*,
+                   CASE WHEN b.owner_user_id = ? THEN 1 ELSE 0 END AS is_owner
+            FROM bases b
+            JOIN users u ON u.id = b.owner_user_id
+            WHERE b.id = ?
+              AND (
+                b.owner_user_id = ?
+                OR EXISTS (
+                  SELECT 1 FROM base_access a
+                  WHERE a.base_id = b.id AND a.phone = ?
+                )
+              )
+            """,
+            (user_id, base_id, user_id, phone),
+        ).fetchone()
+
+
+def get_base_credentials(base_id: int) -> tuple[str, str, str] | None:
+    with connect() as conn:
+        row = conn.execute(
+            """
+            SELECT b.odata_url, c.login, c.password_encrypted
+            FROM bases b
+            JOIN odata_credentials c ON c.base_id = b.id
+            WHERE b.id = ?
+            """,
+            (base_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return row["odata_url"], row["login"], row["password_encrypted"]
+
+
+def list_funds(base_id: int) -> list[sqlite3.Row]:
+    with connect() as conn:
+        return list(
+            conn.execute(
+                "SELECT * FROM funds WHERE base_id = ? ORDER BY id",
+                (base_id,),
+            )
+        )
+
+
+def create_fund(
+    base_id: int, name: str, amount: float, note: str, user_id: int
+) -> sqlite3.Row:
+    with connect() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO funds (base_id, name, amount, note, created_by)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (base_id, name.strip(), amount, note.strip(), user_id),
+        )
+        row = conn.execute("SELECT * FROM funds WHERE id = ?", (cur.lastrowid,)).fetchone()
+        assert row is not None
+        return row
+
+
+def update_fund(
+    fund_id: int, base_id: int, *, name: str | None = None, amount: float | None = None, note: str | None = None
+) -> sqlite3.Row | None:
+    with connect() as conn:
+        row = conn.execute(
+            "SELECT * FROM funds WHERE id = ? AND base_id = ?",
+            (fund_id, base_id),
+        ).fetchone()
+        if row is None:
+            return None
+        new_name = name.strip() if name is not None else row["name"]
+        new_amount = amount if amount is not None else row["amount"]
+        new_note = note.strip() if note is not None else row["note"]
+        conn.execute(
+            """
+            UPDATE funds
+            SET name = ?, amount = ?, note = ?, updated_at = datetime('now')
+            WHERE id = ?
+            """,
+            (new_name, new_amount, new_note, fund_id),
+        )
+        return conn.execute("SELECT * FROM funds WHERE id = ?", (fund_id,)).fetchone()
+
+
+def delete_fund(fund_id: int, base_id: int) -> bool:
+    with connect() as conn:
+        cur = conn.execute(
+            "DELETE FROM funds WHERE id = ? AND base_id = ?",
+            (fund_id, base_id),
+        )
+        return cur.rowcount > 0
 
 
 def upsert_user(telegram_id: int, phone: str) -> sqlite3.Row:
